@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0E1621">
+<title>Override Referee</title>
+<meta name="description" content="Ask the ref anything about Override, the VEX V5RC 2026-2027 game. Rule retrieval that runs on your phone.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230E1621'/%3E%3Ccircle cx='16' cy='16' r='9.5' fill='none' stroke='%230097A7' stroke-width='2.4'/%3E%3Cpath d='M16 6.5v19M6.5 16h19' stroke='%23FCF6BD' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E">
+<!--
+  OVERRIDE REFEREE - Robolabs Summer Academy 2026
+  The same retrieval system students build in the Thursday lab, shipped
+  as a keep-it-all-season web app. View source freely: rule chunks come
+  from rules.json, their embeddings were precomputed into embeddings.json,
+  and your question is embedded RIGHT HERE in your browser (transformers.js,
+  quantized all-MiniLM-L6-v2). Cosine similarity does the rest.
+
+  Game Manual text (c) 2026 VEX Robotics, Inc. Used with permission for
+  educational purposes at Robolabs Summer Academy.
+-->
+<style>
+:root {
+  --bg: #0E1621;
+  --bg-deep: #0A1019;
+  --glass: rgba(255,255,255,0.05);
+  --glass-2: rgba(255,255,255,0.09);
+  --stroke: rgba(255,255,255,0.11);
+  --blue: #124E78;
+  --blue-bright: #3E8CC7;
+  --yellow: #FCF6BD;
+  --teal: #0097A7;
+  --teal-bright: #35C3D3;
+  --ink: #EDF2F7;
+  --dim: #8B97A8;
+  --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --rad: 14px;
+  /* rule family colors (badge text on navy) */
+  --f-SC: #FCF6BD; --f-SG: #56D9E8; --f-GG: #7FB3E8; --f-G: #B4CCF2;
+  --f-R: #FFB08A; --f-S: #FF8A7B; --f-T: #C9A3F0; --f-RSC: #7FE0A8;
+  --f-DEF: #A7B4C6;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+[hidden] { display: none !important; }
+html { font-size: 16px; -webkit-text-size-adjust: 100%; }
+body {
+  background:
+    radial-gradient(1000px 460px at 90% -12%, rgba(0,151,167,0.10), transparent 60%),
+    radial-gradient(820px 400px at -12% -4%, rgba(18,78,120,0.35), transparent 58%),
+    var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  line-height: 1.5;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+.wrap { max-width: 42rem; margin: 0 auto; padding: 0 14px 90px; }
+:focus-visible { outline: 2px solid var(--yellow); outline-offset: 2px; border-radius: 6px; }
+button { font-family: inherit; color: inherit; cursor: pointer; }
+.mono { font-family: var(--mono); }
+
+header { padding: 22px 0 6px; }
+h1 { font-size: 1.6rem; font-weight: 800; letter-spacing: -0.02em; line-height: 1.15; }
+h1 .hl { color: var(--yellow); }
+h1 .whistle { color: var(--teal-bright); }
+.tag { color: var(--dim); font-size: 0.86rem; margin-top: 4px; }
+.tag a { color: var(--teal-bright); text-decoration: none; }
+
+.searchbox { margin-top: 16px; display: flex; gap: 8px; }
+.searchbox input {
+  flex: 1; min-width: 0; background: var(--glass); border: 1px solid var(--stroke);
+  border-radius: var(--rad); color: var(--ink); font-size: 1.02rem;
+  padding: 14px 14px; font-family: inherit;
+}
+.searchbox input::placeholder { color: var(--dim); }
+.searchbox button {
+  background: var(--teal); border: none; border-radius: var(--rad);
+  color: #06171B; font-weight: 800; font-size: 1rem; padding: 0 20px;
+  min-height: 50px; letter-spacing: 0.01em;
+}
+.searchbox button:active { transform: scale(0.97); }
+
+.status { margin-top: 8px; font-family: var(--mono); font-size: 0.68rem; letter-spacing: 0.06em;
+  color: var(--dim); display: flex; align-items: center; gap: 7px; min-height: 18px; }
+.status .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--dim); flex: none; }
+.status.warming .dot { background: var(--yellow); animation: pulse 1.2s ease-in-out infinite; }
+.status.ready .dot { background: var(--teal-bright); box-shadow: 0 0 6px rgba(53,195,211,0.8); }
+.status.fallback .dot { background: #FF8A7B; }
+@keyframes pulse { 50% { opacity: 0.35; } }
+
+.chips-head { display: flex; align-items: center; justify-content: space-between; margin: 18px 0 8px; }
+.chips-head .lab { font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.1em; color: var(--dim); }
+.chips-head button {
+  background: var(--glass); border: 1px solid var(--stroke); border-radius: 9px;
+  color: var(--teal-bright); font-family: var(--mono); font-size: 0.68rem;
+  letter-spacing: 0.06em; padding: 6px 12px;
+}
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip {
+  background: rgba(18,78,120,0.30); border: 1px solid rgba(62,140,199,0.35);
+  border-radius: 999px; color: var(--ink); font-size: 0.86rem;
+  padding: 10px 14px; text-align: left; line-height: 1.3;
+}
+.chip:active { background: rgba(18,78,120,0.55); }
+
+.results { margin-top: 22px; display: flex; flex-direction: column; gap: 12px; }
+.results-lab { font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.1em; color: var(--dim); }
+.card {
+  background: var(--glass); border: 1px solid var(--stroke); border-radius: var(--rad);
+  padding: 14px 14px 12px; position: relative; overflow: hidden;
+}
+.card .top { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+.badge {
+  font-family: var(--mono); font-weight: 700; font-size: 0.78rem; letter-spacing: 0.04em;
+  padding: 3px 9px; border-radius: 7px; background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.14);
+}
+.card .page { font-family: var(--mono); font-size: 0.66rem; color: var(--dim); margin-left: auto; }
+.card h3 { font-size: 0.98rem; font-weight: 700; margin-top: 8px; line-height: 1.35; }
+.card .text { color: #C7D2DF; font-size: 0.9rem; margin-top: 7px; white-space: pre-line; }
+.card .text.clamp { display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden; }
+.card .more {
+  background: none; border: none; color: var(--teal-bright);
+  font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.05em; padding: 8px 0 2px;
+}
+.meter { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+.meter .bar { flex: 1; height: 4px; border-radius: 2px; background: rgba(255,255,255,0.09); overflow: hidden; }
+.meter .fill { height: 100%; border-radius: 2px; background: linear-gradient(90deg, var(--teal), var(--teal-bright)); }
+.meter .m-lab { font-family: var(--mono); font-size: 0.6rem; letter-spacing: 0.07em; color: var(--dim); flex: none; }
+.empty { color: var(--dim); font-size: 0.9rem; padding: 18px 4px; text-align: center; }
+
+footer { margin-top: 40px; border-top: 1px solid var(--stroke); padding: 16px 2px 8px;
+  color: var(--dim); font-size: 0.74rem; line-height: 1.6; }
+footer a { color: var(--teal-bright); text-decoration: none; }
+
+@media (min-width: 700px) { html { font-size: 17px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1><span class="whistle">Override</span> <span class="hl">Referee</span></h1>
+    <p class="tag">Built by Robolabs Summer Academy students' curriculum, powered by the same retrieval you built in the lab.</p>
+  </header>
+
+  <form class="searchbox" id="form">
+    <input id="q" type="search" autocomplete="off" enterkeyhint="search"
+           placeholder="Ask the ref anything about Override" aria-label="Ask the ref anything about Override">
+    <button type="submit">Ask</button>
+  </form>
+  <div class="status warming" id="status"><span class="dot"></span><span id="statusText">warming up the ref, about 10 seconds</span></div>
+
+  <div class="chips-head">
+    <span class="lab">TAP A QUESTION</span>
+    <button type="button" id="shuffle">shuffle</button>
+  </div>
+  <div class="chips" id="chips"></div>
+
+  <div class="results" id="results"></div>
+
+  <footer>
+    <p>Rules text is retrieved word-for-word from the Override Game Manual v1.0 with its PDF page number. The ref finds the rule; reading it is still your job. Not an official VEX product.</p>
+    <p style="margin-top:8px">Game Manual text &copy; 2026 VEX Robotics, Inc. Used with permission for educational purposes at Robolabs Summer Academy. &middot; <a href="https://github.com/alex-robolabs/override-referee">source</a></p>
+  </footer>
+</div>
+
+<script type="module">
+/* ---------- data ---------- */
+let RULES, EMB;
+try {
+  [RULES, EMB] = await Promise.all([
+    fetch("rules.json").then(r => r.json()),
+    fetch("embeddings.json").then(r => r.json()),
+  ]);
+} catch (err) {
+  document.getElementById("statusText").textContent =
+    "could not load the rules data. Check your connection and reload.";
+  document.getElementById("status").className = "status fallback";
+  throw err;
+}
+const CHUNKS = RULES.filter(c => c.program === "V5RC");
+const BY_ID = Object.fromEntries(CHUNKS.map(c => [c.id, c]));
+const VECS = EMB.ids.map((id, i) => [BY_ID[id], EMB.vectors[i]]).filter(([c]) => c);
+
+/* ---------- the 20 suggested questions (every one verified at build time
+     to retrieve its governing rule in the top 3) ---------- */
+const SUGGESTED = [
+  ["How many points is a yellow pin worth?", "scoring"],
+  ["How many points is the autonomous bonus worth?", "scoring"],
+  ["How do we earn the autonomous win point?", "scoring"],
+  ["Who owns the yellow pins in the midfield?", "scoring"],
+  ["Do robots have to stop moving before the score is counted?", "scoring"],
+  ["How tall can my robot get during a match?", "gameplay"],
+  ["Can my robot hold two pins at the same time?", "gameplay"],
+  ["Can I pull scoring objects out of the other alliance's goal?", "gameplay"],
+  ["Can we add more pins to the field during the match?", "gameplay"],
+  ["What are the endgame rules in the midfield?", "gameplay"],
+  ["Can I cross the autonomous line during autonomous?", "gameplay"],
+  ["What size must my robot be at the start?", "robot"],
+  ["How many motors can my robot use?", "robot"],
+  ["Is tape legal on my robot?", "robot"],
+  ["Can my robot use pneumatics?", "robot"],
+  ["Does my robot's code have to use the competition template?", "robot"],
+  ["Can we appeal a referee's decision?", "tournament"],
+  ["How does alliance selection work?", "tournament"],
+  ["How many qualification matches does each team get?", "tournament"],
+  ["What happens if an elimination match ends in a tie?", "tournament"],
+];
+
+/* ---------- quick match: keyword overlap (Act 1 of the lab) ---------- */
+const STOP = new Set(["a","an","the","is","are","in","on","of","to","and","or",
+  "for","with","at","by","be","it","its","my","our","we","i","you","your",
+  "do","does","can","what","how","that","this"]);
+const words = s => new Set((s.toLowerCase().match(/[a-z0-9]+/g) || []).filter(w => !STOP.has(w)));
+const chunkText = c => `${c.id}: ${c.title} ${c.text}`;
+const KWORDS = CHUNKS.map(c => [c, words(chunkText(c))]);
+
+function keywordSearch(q, k = 5) {
+  const qw = words(q);
+  return KWORDS
+    .map(([c, cw]) => [[...qw].filter(w => cw.has(w)).length, c])
+    .sort((a, b) => b[0] - a[0])
+    .slice(0, k);
+}
+
+/* ---------- meaning match: in-browser embedding (Act 2 of the lab) ---------- */
+let embedder = null;   // set once transformers.js is warm
+let modelFailed = false;
+
+async function warmUp() {
+  const nocdn = new URLSearchParams(location.search).has("nocdn");
+  try {
+    if (nocdn) throw new Error("nocdn test flag");
+    const { pipeline } = await import(
+      "https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.2.0");
+    const pipe = await pipeline("feature-extraction", EMB.model, { dtype: EMB.dtype });
+    await pipe("warm up", { pooling: "mean", normalize: true });
+    embedder = pipe;
+    setStatus("ready", "meaning match ready");
+    const q = input.value.trim();
+    if (q) run(q);                       // upgrade the answer on screen
+  } catch (err) {
+    console.warn("model load failed, staying on quick match:", err);
+    modelFailed = true;
+    setStatus("fallback", "quick match only (meaning model could not load)");
+  }
+}
+
+async function semanticSearch(q, k = 5) {
+  const out = await embedder(q, { pooling: "mean", normalize: true });
+  const qv = out.data;
+  return VECS
+    .map(([c, v]) => {
+      let s = 0;
+      for (let d = 0; d < v.length; d++) s += v[d] * qv[d];
+      return [s, c];
+    })
+    .sort((a, b) => b[0] - a[0])
+    .slice(0, k);
+}
+
+/* ---------- UI ---------- */
+const input = document.getElementById("q");
+const form = document.getElementById("form");
+const resultsEl = document.getElementById("results");
+const chipsEl = document.getElementById("chips");
+const statusEl = document.getElementById("status");
+const statusText = document.getElementById("statusText");
+
+function setStatus(cls, text) {
+  statusEl.className = `status ${cls}`;
+  statusText.textContent = text;
+}
+
+function badge(c) {
+  const color = getComputedStyle(document.documentElement)
+    .getPropertyValue(`--f-${c.family}`) || "#A7B4C6";
+  const label = c.family === "DEF" ? c.id : `<${c.id}>`;
+  return `<span class="badge" style="color:${color.trim()}">${esc(label)}</span>`;
+}
+const esc = s => s.replace(/[&<>"']/g, m =>
+  ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m]));
+
+function render(list, mode, q) {
+  const labels = { meaning: "MEANING MATCH", quick: "QUICK MATCH" };
+  const max = Math.max(...list.map(([s]) => s), 1e-9);
+  resultsEl.innerHTML = `<div class="results-lab">${labels[mode]} &middot; TOP ${list.length}</div>`;
+  if (!list.length || list[0][0] <= 0) {
+    resultsEl.innerHTML += `<div class="empty">Nothing matched. Try different words, or tap a suggested question.</div>`;
+    return;
+  }
+  for (const [score, c] of list) {
+    const pct = mode === "meaning"
+      ? Math.max(4, Math.min(100, Math.round(((score - 0.25) / 0.5) * 100)))
+      : Math.max(4, Math.round((score / max) * 100));
+    const longText = c.text.length > 420;
+    const card = document.createElement("div");
+    card.className = "card";
+    card.innerHTML = `
+      <div class="top">${badge(c)}<span class="page">manual p. ${c.page}</span></div>
+      <h3>${esc(c.title)}</h3>
+      <div class="text ${longText ? "clamp" : ""}">${esc(c.text)}</div>
+      ${longText ? `<button class="more" type="button">show the whole rule</button>` : ""}
+      <div class="meter"><span class="m-lab">MATCH</span><div class="bar"><div class="fill" style="width:${pct}%"></div></div></div>`;
+    if (longText) {
+      const btn = card.querySelector(".more");
+      btn.addEventListener("click", () => {
+        const t = card.querySelector(".text");
+        const open = t.classList.toggle("clamp");
+        btn.textContent = open ? "show the whole rule" : "collapse";
+      });
+    }
+    resultsEl.appendChild(card);
+  }
+}
+
+let seq = 0;
+async function run(q) {
+  const my = ++seq;
+  if (embedder) {
+    const hits = await semanticSearch(q);
+    if (my === seq) render(hits, "meaning", q);
+  } else {
+    render(keywordSearch(q), "quick", q);
+  }
+}
+
+form.addEventListener("submit", e => { e.preventDefault(); const q = input.value.trim(); if (q) { run(q); input.blur(); } });
+
+/* chips: 5 at a time from a category-interleaved deck, so every screenful
+   spans scoring / gameplay / robot / tournament; shuffle walks the deck */
+const DECK = (() => {
+  const cats = ["scoring", "gameplay", "robot", "tournament"]
+    .map(cat => SUGGESTED.filter(([, c]) => c === cat).map(([q]) => q));
+  const out = [];
+  for (let round = 0; out.length < SUGGESTED.length; round++)
+    for (const list of cats) if (list[round]) out.push(list[round]);
+  return out;
+})();
+let chipOffset = 0;
+function drawChips() {
+  chipsEl.innerHTML = "";
+  for (let i = 0; i < 5; i++) {
+    const q = DECK[(chipOffset + i) % DECK.length];
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "chip"; b.textContent = q;
+    b.addEventListener("click", () => { input.value = q; run(q); });
+    chipsEl.appendChild(b);
+  }
+}
+document.getElementById("shuffle").addEventListener("click", () => { chipOffset = (chipOffset + 5) % DECK.length; drawChips(); });
+drawChips();
+
+/* hidden self-test used at build verification: window.__refTest() */
+window.__refTest = async function (expects) {
+  const out = [];
+  for (const [q, expect] of expects) {
+    const hits = embedder ? await semanticSearch(q, 3) : keywordSearch(q, 3);
+    out.push({ q, top3: hits.map(([, c]) => c.id), pass: hits.some(([, c]) => expect.includes(c.id)) });
+  }
+  return out;
+};
+window.__refReady = () => ({ ready: !!embedder, failed: modelFailed, chunks: VECS.length });
+
+warmUp();
+</script>
+</body>
+</html>

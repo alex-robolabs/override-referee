@@ -1,0 +1,15 @@
+{
+  "name": "override-referee",
+  "version": "1.0.0",
+  "description": "Ask the ref anything about **Override**, the VEX V5 Robotics Competition 2026-2027 game. Built by the Robolabs Summer Academy 2026 curriculum: the same retrieval system students build in the Thursday lab, gift-wrapped as a web app they keep all season.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@huggingface/transformers": "^4.2.0"
+  }
+}
