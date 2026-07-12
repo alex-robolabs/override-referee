@@ -38,12 +38,18 @@ If the API rate-limits mid-class (429s): have tables run one at a time for a min
 4. "Everyone watched it search twice?" (Act 3)
 5. "Everyone's table shows 3 versus 8?" (Act 4)
 
-## Expected numbers (verified at build time)
+## Expected numbers (verified live at build time, 2026-07-11)
 
 - Eval: keyword **3/8**, semantic **8/8**, hit-at-top-3.
 - Yellow pin = 10 points (owned), alliance pin = 5, autonomous bonus = 12, robot in midfield = 8. Scoring table, manual p. 25.
 - Break-it question "How tall can my robot get during a match?": keyword returns GG3/GG15/R2 (all wrong), semantic returns <SG3> first at ~0.66 similarity. The rule: 50 inch limit, manual p. 31.
-- Act 3 star question ("leaning over the midfield at the buzzer") retrieves <SC6> and the scoring table; the agent should make exactly two search_rules calls. If the model answers in one search, ask it the question again with "and cite the exact point value" appended; two searches return.
+- Act 0, tested 9 times across 3 questions on `gemini-flash-latest`: 9/9 failures. Asked about SG6 it denies Override exists, decides you mean Over Under (2023-2024), and recites a fabricated rule about goals and Triballs, with penalties. That exact recorded answer ships as the replay.
+- Act 3 star question ("leaning over the midfield at the buzzer"): verified 3 runs out of 3 with EXACTLY two search_rules calls, both phrased as natural questions, final answer citing <SC6> and the 8 point value. The persona forces one search per sub-question; the tool description asks for natural-question queries (keyword-soup queries retrieve worse and cause extra searches).
+
+## Two gotchas found live (read before reusing Monday's code)
+
+1. **Gemini now signs tool calls.** Current `gemini-flash-latest` returns a `thought_signature` inside each tool call and 400-errors if your next request echoes the assistant message without it. Monday's notebook rebuilt that message dict by hand, which strips the signature: that pattern now BREAKS mid-loop. Thursday's loop does `messages.append(msg)` (hand the model's message straight back). If you reuse Monday's agent cell anywhere, apply the same fix.
+2. **Thinking latency.** Each agent call can take 15-40 s because the model reasons before acting. The Act 3 star run takes about 1-2 minutes live. Narrate the PLAN/ACT/OBSERVE lines as they stream; the wait is the demo.
 
 ## Challenge answer key
 
